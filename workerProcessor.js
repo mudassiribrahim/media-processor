@@ -1,17 +1,38 @@
-import { parentPort, workerData } from "node:worker_threads";
+const { parentPort, workerData } = require("worker_threads");
+const fs = require("fs");
+const crypto = require("crypto");
 
-function heavyComputation(file) {
-  // Simulate a heavy computation
-  let count = 0;
-  for (let i = 0; i < 1e9; i++) {
-    count += i % 2;
-  }
-  return {
-    task: "heavyComputation",
-    frameDetected: count % 500,
-    doneBy: "workerProcessor",
-  };
+// Generate SHA256 hash of the uploaded file
+function generateFileHash(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+
+    stream.on("data", (chunk) => {
+      hash.update(chunk);
+    });
+
+    stream.on("end", () => {
+      resolve(hash.digest("hex"));
+    });
+
+    stream.on("error", (err) => {
+      reject(err);
+    });
+  });
 }
 
-const result = heavyComputation(workerData.file);
-parentPort.postMessage(result);
+generateFileHash(workerData.file)
+  .then((hash) => {
+    parentPort.postMessage({
+      task: "file hash generation",
+      hash,
+      doneBy: "worker_thread",
+    });
+  })
+  .catch((err) => {
+    parentPort.postMessage({
+      error: err.message,
+      doneBy: "worker_thread",
+    });
+  });
