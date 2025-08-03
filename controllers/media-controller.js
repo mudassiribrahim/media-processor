@@ -1,5 +1,6 @@
 import fs, { read } from "fs";
 import spawn from "child_process";
+import { Worker } from "worker_threads";
 
 const handleUpload = (req, res) => {
   const filePath = req.file.path;
@@ -46,6 +47,13 @@ const handleUpload = (req, res) => {
   } catch (error) {
     console.error(`Error parsing child process output: ${error}`);
   }
+  const worker = new Worker("./workerProcessor.js", {
+    workerData: { file: filePath },
+  });
+
+  worker.on("message", (workerResult) => {
+    console.log(`Worker result: ${JSON.stringify(result)}`);
+  });
 
   res.json({
     message: "File uploaded successfully",
@@ -53,6 +61,12 @@ const handleUpload = (req, res) => {
     totalChunks: chunkIndex,
     streamSizeKB: (totalBytes / 1024).toFixed(2),
     childProcessResult: childResult,
+    workerResult: workerResult,
+  });
+
+  worker.on("error", (error) => {
+    console.error(`Worker error: ${error}`);
+    res.status(500).json({ error: "Error processing file" });
   });
 
   readStream.on("error", (error) => {
